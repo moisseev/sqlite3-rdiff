@@ -1,4 +1,4 @@
-#!/usr/bin/tclsh8.5
+#!/usr/bin/env tclsh
 # added small-size signature generator and limited multimaster support
 package require sqlite3
 
