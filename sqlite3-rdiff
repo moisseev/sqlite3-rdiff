@@ -87,6 +87,7 @@ proc signature {orig signature args} {
         file delete $signature
     }
     sqlite3 db $signature
+    load_extension_md5
     db eval {PRAGMA synchronous =  OFF}
     db eval {attach database $orig as orig}
 
@@ -128,6 +129,7 @@ proc delta {signature dest delta args} {
     }
 
     sqlite3 db $dest
+    load_extension_md5
     db eval {PRAGMA synchronous =  OFF}
     db eval {attach database $signature as signature}
     db eval {attach database $delta as delta}
@@ -263,6 +265,7 @@ proc analyze {slave master args} {
     for {set i 1} {$i < 100} {incr i} {
         puts -nonewline "."
         sqlite3 db :memory:
+        load_extension_md5
         db eval {attach database $slave as slave}
         db eval {attach database $master as master}
         set tables [db eval "select name from master.sqlite_master where type='table' and name not like 'sqlite_%' and name like '$opts(--table-name)'"]
@@ -348,6 +351,11 @@ proc check_opts {args} {
         }
     }
     return [array get opts]
+}
+
+proc load_extension_md5 {} {
+    db enable_load_extension 1
+    db eval { select load_extension("/usr/local/libexec/sqlite-ext/libsqlitemd5.so") }
 }
 
 if {$argc >= 4 && [lindex $argv end-3] eq {delta}} {
