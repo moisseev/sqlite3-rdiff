@@ -1,0 +1,369 @@
+#!/usr/bin/tclsh8.5
+# added small-size signature generator and limited multimaster support
+package require sqlite3
+
+proc usage {{message {}}} {
+    if {$message ne {}} {
+        puts "ERROR: $message\n"
+    }
+    puts {
+NAME
+
+       sqlite3-rdiff - compute and apply signature-based row differences for SQLite3
+                       databases
+
+SYNOPSYS
+       sqlite3-rdiff [--table-name expression] [--rows-per-hash N] signature old-database signature-file
+
+       sqlite3-rdiff [--table-name expression] delta signature-file new-database delta-file
+
+       sqlite3-rdiff [--table-name expression] patch old-database delta-file result-database
+
+       sqlite3-rdiff [--table-name expression] analyze old-database new-database
+
+
+DESCRIPTION
+
+       Signature is computed by md5 algorithm for each full row. Hash collisions are
+       resolved by using different --rows-per-hash for some replication session.
+       The result-file can be same as the old-file in patch mode.
+
+OPTIONS
+
+       --table-name     regular expression for table names, use ? for any single symbol
+                        and % for any set of symbols.
+
+       --rows-per-hash  how much rows are hashed at once. The default value is 1.
+                        Increase it for small signature and decrease for small delta.
+                        Use analyze mode to determine the best value of this parameter.
+                        For master-slave replication any value will be safe.
+                        This option is used only in signature building mode.
+
+       --multimaster    only insert nonexisting records. May produce duplicates when
+                        a table has no unique column or indices with "replace" or
+                       "ignore" conflict resolution algorithm and --rows-per-hash
+                        option is greater than 1.
+                        Useful for master-master replication on the inserts-only
+                        populated databases.
+
+AUTHOR
+       Alexey Pechnikov <pechnikov@mobigroup.ru>
+
+LICENSE
+       This code in Public Domain
+
+SEE ALSO
+       The main sqlite3-rdiff web page is at 
+       http://sqlite.mobigroup.ru/src/wiki?name=sqlite3-rdiff
+
+}
+    exit
+}
+
+# this code may work with different parameters list returned by pragma table_info
+proc table_columns {table} {
+    db eval {create temp table if not exists _test_table_info(a text)}
+    set count [llength [db eval "pragma table_info(_test_table_info)"]]
+    set params [db eval "pragma table_info($table)"]
+    set cols {}
+    for {set i 1} {$i<[llength $params]} {incr i $count} {
+        lappend cols [lindex $params $i]
+    }
+#    foreach {number name type nullflag default pkflag readonly enforced} [db eval "pragma table_info($table)"] {
+#        lappend cols $name
+#    }
+    return $cols
+}
+
+proc signature {orig signature args} {
+    array set opts $args
+    puts "signature $orig $signature $args"
+
+    if {[file exists $orig] == 0} {
+        puts "File $orig does not exists"
+        usage
+    }
+    if {[file exists $signature] == 1} {
+        file delete $signature
+    }
+    sqlite3 db $signature
+    db eval {PRAGMA synchronous =  OFF}
+    db eval {attach database $orig as orig}
+
+    db transaction {
+        # meta information
+        db eval {create table _sqlite_rdiff_option (name text, value text)}
+        db eval {create table _sqlite_rdiff_table (name text)}
+        db eval {insert into _sqlite_rdiff_option values ('rows-per-hash',$opts(--rows-per-hash))}
+
+        set tables [db eval "select name from orig.sqlite_master where type='table' and name not like 'sqlite_%' and name like '$opts(--table-name)'"]
+        foreach table $tables {
+            db eval {insert into _sqlite_rdiff_table values ($table)}
+            set cols [join [table_columns $table] ,]
+            db eval "create table main._sqlite_rdiff_s_$table (hash blob)"
+            db eval "insert into main._sqlite_rdiff_s_$table (rowid,hash) select rowid/$opts(--rows-per-hash) as id, group_md5($cols) from orig.$table group by id"
+
+            # report result
+            set count [db eval "select count(*) from main._sqlite_rdiff_s_$table"]
+            puts "=$count\t\t$table"
+        }
+    }
+    db close
+}
+
+proc delta {signature dest delta args} {
+    array set opts $args
+    puts "delta $signature $dest $delta $args"
+
+    if {[file exists $signature] == 0} {
+        puts "File $signature does not exists"
+        usage
+    }
+    if {[file exists $dest] == 0} {
+        puts "File $dest does not exists"
+        usage
+    }
+    if {[file exists $delta] == 1} {
+        file delete $delta
+    }
+
+    sqlite3 db $dest
+    db eval {PRAGMA synchronous =  OFF}
+    db eval {attach database $signature as signature}
+    db eval {attach database $delta as delta}
+
+    db transaction {
+        db eval {create table delta._sqlite_rdiff_option as select * from signature._sqlite_rdiff_option}
+        db eval {create table delta._sqlite_rdiff_table as select * from signature._sqlite_rdiff_table}
+
+        set rows_per_hash [db onecolumn {select value from delta._sqlite_rdiff_option where name='rows-per-hash'}]
+
+        set tables [db eval "select name from signature._sqlite_rdiff_table where name like '$opts(--table-name)'"]
+        foreach table $tables {
+            # if no-exists table
+            if {[db exists {select name from main.sqlite_master where type='table' and name=$table}] == 0} {
+                puts "-\t-\t$table"
+            }
+            # table exists, build delta
+            set cols [join [table_columns $table] ,]
+
+            db eval "create temp table $table (hash blob)"
+            db eval "insert into temp.$table (rowid,hash) select rowid/$rows_per_hash as id, group_md5($cols) from main.$table group by id"
+
+            db eval "create temp table diff (ID INTEGER PRIMARY KEY)"
+            db eval "insert into temp.diff select rowid from (select rowid, hash from temp.$table except select rowid,hash from signature._sqlite_rdiff_s_$table)"
+
+            db eval "create table delta._sqlite_rdiff_i_$table ($cols)"
+            for {set i 0} {$i < $rows_per_hash} {incr i} {
+                db eval "insert into delta._sqlite_rdiff_i_$table (rowid, $cols) select rowid,* from main.$table where rowid in (select $rows_per_hash*rowid+$i from temp.diff)"
+            }
+            db eval "drop table temp.diff"
+
+            db eval "create temp table _diff (ID INTEGER PRIMARY KEY)"
+            db eval "insert into temp._diff select rowid from (select rowid, hash from signature._sqlite_rdiff_s_$table except select rowid,hash from temp.$table)"
+            db eval "create table delta._sqlite_rdiff_d_$table (ID INTEGER PRIMARY KEY)"
+            db eval "insert into delta._sqlite_rdiff_d_$table select rowid from temp._diff"
+            db eval "drop table temp._diff"
+            db eval "drop table temp.$table"
+
+            # report result
+            set delete [db eval "select count(*) from delta._sqlite_rdiff_d_$table"]
+            set insert [db eval "select count(*) from delta._sqlite_rdiff_i_$table"]
+            puts "-$delete\t+$insert\t$table"
+        }
+    }
+    db close
+
+}
+
+proc patch {orig delta dest args} {
+    array set opts $args
+    puts "patch $orig $delta $dest $args"
+
+    if {[file exists $orig] == 0} {
+        puts "File $orig does not exists"
+        usage
+    }
+    if {[file exists $delta] == 0} {
+        puts "File $delta does not exists"
+        usage
+    }
+    if {$orig ne $dest} {
+        if {[file exists $dest] == 1} {
+            file delete $dest
+        }
+        file copy $orig $dest
+    }
+    sqlite3 db $dest
+    db eval {PRAGMA synchronous=OFF}
+    db eval {PRAGMA foreign_keys=OFF}
+    db eval {attach database $delta as delta}
+
+    db transaction {
+        set rows_per_hash [db onecolumn {select value from delta._sqlite_rdiff_option where name='rows-per-hash'}]
+
+        set tables [db eval "select name from delta._sqlite_rdiff_table where name like '$opts(--table-name)'"]
+        foreach table $tables {
+            # if no-exists table
+            if {[db exists {select name from main.sqlite_master where type='table' and name=$table}] == 0} {
+                puts "-\t-\t$table"
+                continue
+            }
+            # table exists
+            set trigger_sql {}
+            set triggers 0
+            # remove triggers before update
+            db eval {select name,sql from main.sqlite_master where type='trigger' and tbl_name=$table} {
+                db eval "drop trigger $name"
+                append trigger_sql "$sql;"
+                incr triggers
+            }
+            # in multimaster mode no deletes may be performed
+            if {$opts(--multimaster) == 0} {
+                # delete updated and new records
+                for {set i 0} {$i < $rows_per_hash} {incr i} {
+                    db eval "delete from main.$table where rowid in (select $rows_per_hash*rowid+$i from delta._sqlite_rdiff_d_$table)"
+                }
+            }
+
+            # insert updated and non-existing records
+            set cols [join [table_columns $table] ,]
+            db eval "insert into main.$table (rowid,$cols) select rowid,* from delta._sqlite_rdiff_i_$table"
+            # restore triggers after update
+            db eval $trigger_sql
+
+            # report result
+            set delete [db eval "select count(*) from delta._sqlite_rdiff_d_$table"]
+            set insert [db eval "select count(*) from delta._sqlite_rdiff_i_$table"]
+            puts "-$delete\t+$insert\t$table ($triggers triggers disabled)"
+        }
+    }
+}
+
+proc analyze {slave master args} {
+    array set opts $args
+    puts "analyze $slave $master $args"
+
+    if {[file exists $slave] == 0} {
+        puts "File $slave does not exists"
+        usage
+    }
+    if {[file exists $master] == 0} {
+        puts "File $master does not exists"
+        usage
+    }
+
+    set size_slave [file size slave.db]
+    set size_master [file size master.db]
+    puts "[expr $size_slave/1024]\told-database size (kB)"
+    puts "[expr $size_master/1024]\tnew-database size (kB)"
+    fconfigure stdout -buffering none
+    puts -nonewline "Calculating optimal --rows-per-hash value "
+    set size 0
+    for {set i 1} {$i < 100} {incr i} {
+        puts -nonewline "."
+        sqlite3 db :memory:
+        db eval {attach database $slave as slave}
+        db eval {attach database $master as master}
+        set tables [db eval "select name from master.sqlite_master where type='table' and name not like 'sqlite_%' and name like '$opts(--table-name)'"]
+        foreach table $tables {
+            # if no-exists table in slave database
+            if {[db exists {select name from slave.sqlite_master where type='table' and name=$table}] == 0} {
+                puts "$table\t table does not exists in slave database"
+                continue
+            }
+            set cols [join [table_columns $table] ,]
+
+            # build signature
+            db eval "create table main._sqlite_rdiff_s_$table (hash blob)"
+            db eval "insert into main._sqlite_rdiff_s_$table (rowid,hash) select rowid/$i as id, group_md5($cols) from slave.$table group by id"
+
+            # build patch
+            db eval "create temp table $table (hash blob)"
+            db eval "insert into temp.$table (rowid,hash) select rowid/$i as id, group_md5($cols) from master.$table group by id"
+
+            db eval "create temp table diff (ID INTEGER PRIMARY KEY)"
+            db eval "insert into temp.diff select rowid from (select rowid, hash from temp.$table except select rowid,hash from main._sqlite_rdiff_s_$table)"
+
+            db eval "create table main._sqlite_rdiff_i_$table ($cols)"
+            for {set j 0} {$j < $i} {incr j} {
+                db eval "insert into main._sqlite_rdiff_i_$table (rowid, $cols) select rowid,* from master.$table where rowid in (select $i*rowid+$j from temp.diff)"
+            }
+            db eval "drop table temp.diff"
+
+            db eval "create temp table _diff (ID INTEGER PRIMARY KEY)"
+            db eval "insert into temp._diff select rowid from (select rowid, hash from main._sqlite_rdiff_s_$table except select rowid,hash from temp.$table)"
+            db eval "create table main._sqlite_rdiff_d_$table (ID INTEGER PRIMARY KEY)"
+            db eval "insert into main._sqlite_rdiff_d_$table select rowid from temp._diff"
+            db eval "drop table temp._diff"
+            db eval "drop table temp.$table"
+        }
+        set page_count [db onecolumn {pragma page_count}]
+        set page_size [db onecolumn {pragma page_size}]
+        db close
+        # calculate
+        set size_new [expr $page_count*$page_size]
+        if {$size != 0 && $size_new > $size} {
+            # previous value is optimal
+            puts ""
+            puts "[expr $i-1]\toptimal --rows-per-hash option value"
+            puts "[expr $size/1024]\tsignature+delta size (kB)"
+            return
+        }
+        set size $size_new
+#        puts "$i\t[expr $size/1024]\tsignature+delta size (kB)"
+    }
+    puts "?\toptimal --rows-per-hash option value does not found"
+}
+
+proc check_opts {args} {
+    # default options
+    array set opts {--table-name % --rows-per-hash 10 --multimaster 0}
+
+    while {[llength $args] > 0} {
+        set args [lassign $args arg]
+        switch -exact $arg {
+          --table-name {
+              set args [lassign $args value]
+              if {$value ne {}} {
+                  set opts($arg) [string map {' ''} $value]
+              } else {
+                  usage "The $arg option may have value"
+              }
+          }
+          --rows-per-hash {
+              set args [lassign $args value]
+              if {[string is int -strict $value] == 1 && $value > 0} {
+                  set opts($arg) $value
+              } else {
+                  usage "The $arg option may be positive integer value"
+              }
+          }
+          --multimaster {
+              set opts($arg) 1
+          }
+          default {
+              usage "The unknown option $arg"
+          }
+        }
+    }
+    return [array get opts]
+}
+
+if {$argc >= 4 && [lindex $argv end-3] eq {delta}} {
+    set opts [check_opts {*}[lrange $argv 0 end-4]]
+    delta {*}[lrange $argv end-2 end] {*}$opts
+} elseif {$argc >= 4 && [lindex $argv end-3] eq {patch}} {
+    set opts [check_opts {*}[lrange $argv 0 end-4]]
+    patch {*}[lrange $argv end-2 end] {*}$opts
+} elseif {$argc >= 3 && [lindex $argv end-2] eq {signature}} {
+    set opts [check_opts {*}[lrange $argv 0 end-3]]
+    signature {*}[lrange $argv end-1 end] {*}$opts
+} elseif {$argc == 3 && [lindex $argv end-2] eq {analyze}} {
+    set opts [check_opts {*}[lrange $argv 0 end-3]]
+    analyze {*}[lrange $argv end-1 end] {*}$opts
+} elseif {$argc == 0} {
+    usage
+} else {
+    usage "Unknown command line options $argv"
+}
