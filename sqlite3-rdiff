@@ -367,7 +367,7 @@ if {$argc >= 4 && [lindex $argv end-3] eq {delta}} {
 } elseif {$argc >= 3 && [lindex $argv end-2] eq {signature}} {
     set opts [check_opts {*}[lrange $argv 0 end-3]]
     signature {*}[lrange $argv end-1 end] {*}$opts
-} elseif {$argc == 3 && [lindex $argv end-2] eq {analyze}} {
+} elseif {$argc >= 3 && [lindex $argv end-2] eq {analyze}} {
     set opts [check_opts {*}[lrange $argv 0 end-3]]
     analyze {*}[lrange $argv end-1 end] {*}$opts
 } elseif {$argc == 0} {
