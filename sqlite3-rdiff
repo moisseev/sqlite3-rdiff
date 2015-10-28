@@ -255,8 +255,8 @@ proc analyze {slave master args} {
         usage
     }
 
-    set size_slave [file size slave.db]
-    set size_master [file size master.db]
+    set size_slave [file size $slave]
+    set size_master [file size $master]
     puts "[expr $size_slave/1024]\told-database size (kB)"
     puts "[expr $size_master/1024]\tnew-database size (kB)"
     fconfigure stdout -buffering none
