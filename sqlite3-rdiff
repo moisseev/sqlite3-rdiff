@@ -102,7 +102,7 @@ proc signature {orig signature args} {
             db eval {insert into _sqlite_rdiff_table values ($table)}
             set cols [join [table_columns $table] ,]
             db eval "create table main._sqlite_rdiff_s_$table (hash blob)"
-            db eval "insert into main._sqlite_rdiff_s_$table (rowid,hash) select rowid/$opts(--rows-per-hash) as id, group_md5($cols) from orig.$table group by id"
+            db eval "insert into main._sqlite_rdiff_s_$table (rowid,hash) select rowid/$opts(--rows-per-hash) as hash_id_xe111, group_md5($cols) from orig.$table group by hash_id_xe111"
 
             # report result
             set count [db eval "select count(*) from main._sqlite_rdiff_s_$table"]
@@ -150,7 +150,7 @@ proc delta {signature dest delta args} {
             set cols [join [table_columns $table] ,]
 
             db eval "create temp table $table (hash blob)"
-            db eval "insert into temp.$table (rowid,hash) select rowid/$rows_per_hash as id, group_md5($cols) from main.$table group by id"
+            db eval "insert into temp.$table (rowid,hash) select rowid/$rows_per_hash as hash_id_xe111, group_md5($cols) from main.$table group by hash_id_xe111"
 
             db eval "create temp table diff (ID INTEGER PRIMARY KEY)"
             db eval "insert into temp.diff select rowid from (select rowid, hash from temp.$table except select rowid,hash from signature._sqlite_rdiff_s_$table)"
@@ -279,11 +279,11 @@ proc analyze {slave master args} {
 
             # build signature
             db eval "create table main._sqlite_rdiff_s_$table (hash blob)"
-            db eval "insert into main._sqlite_rdiff_s_$table (rowid,hash) select rowid/$i as id, group_md5($cols) from slave.$table group by id"
+            db eval "insert into main._sqlite_rdiff_s_$table (rowid,hash) select rowid/$i as hash_id_xe111, group_md5($cols) from slave.$table group by hash_id_xe111"
 
             # build patch
             db eval "create temp table $table (hash blob)"
-            db eval "insert into temp.$table (rowid,hash) select rowid/$i as id, group_md5($cols) from master.$table group by id"
+            db eval "insert into temp.$table (rowid,hash) select rowid/$i as hash_id_xe111, group_md5($cols) from master.$table group by hash_id_xe111"
 
             db eval "create temp table diff (ID INTEGER PRIMARY KEY)"
             db eval "insert into temp.diff select rowid from (select rowid, hash from temp.$table except select rowid,hash from main._sqlite_rdiff_s_$table)"
