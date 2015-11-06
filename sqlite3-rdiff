@@ -355,7 +355,7 @@ proc check_opts {args} {
 
 proc load_extension_md5 {} {
     db enable_load_extension 1
-    db eval { select load_extension("/usr/local/libexec/sqlite-ext/libsqlitemd5.so") }
+    db eval { select load_extension("libsqlitemd5.so") }
 }
 
 if {$argc >= 4 && [lindex $argv end-3] eq {delta}} {
