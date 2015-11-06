@@ -78,13 +78,13 @@ Calculating optimal --rows-per-hash value ..........
 496	signature+delta size (kB)
 ~~~
 
-## Author
-
-Alexey Pechnikov <pechnikov@mobigroup.ru>
-
 ## License
 
 This code in Public Domain
+
+## Acknowledgements
+
+The code is based heavily on the [now deprecated](http://sqlite.mobigroup.ru/finfo?name=util/sqlite3-rdiff) [MBG SQLite's](http://sqlite.mobigroup.ru) [sqlite3-rdiff](http://sqlite.mobigroup.ru/wiki?name=sqlite3-rdiff) utility by Alexey Pechnikov <pechnikov@mobigroup.ru>.
 
 ## See also
 
