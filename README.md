@@ -4,10 +4,10 @@ compute and apply signature-based row differences for SQLite3 databases
 
 ## Depends
 
-Tcl (and lang/tcl-wrapper for FreeBSD)
-SQLite extension for Tcl
-SQLite3
-[sqlite-md5 extension library for SQLite](https://github.com/moisseev/sqlite-md5)
+- Tcl (and lang/tcl-wrapper for FreeBSD)
+- SQLite extension for Tcl
+- SQLite3
+- [sqlite-md5 extension library for SQLite](https://github.com/moisseev/sqlite-md5)
 
 ## Description
 
