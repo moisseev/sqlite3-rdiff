@@ -1,0 +1,31 @@
+#!/usr/bin/env tclsh
+package require sqlite3
+
+array set file_name {
+    master "master.db"
+    slave  "slave.db"
+    sign   "slave.db.sign"
+    delta  "slave.db.delta"
+}
+
+puts "slave file size(B)\t[file size $file_name(slave)]"
+puts "master file size(B)\t[file size $file_name(master)]"
+puts ""
+puts "size in B, elapsed time in mS"
+puts -nonewline "rows\tsign size\tdelta size\tsign + delta size\t"
+puts "sign time\tdelta time\tsign + delta time"
+
+for {set i 1} {$i<=200} {incr i} {
+    foreach {action args} { \
+      "sign"  "--rows-per-hash $i signature $file_name(slave) $file_name(sign)" \
+      "delta" "delta $file_name(sign) $file_name(master) $file_name(delta)" \
+    } {
+        set time_output [time {eval exec ./sqlite3-rdiff $args}]
+
+        set action_time($action) [expr [regexp -inline {\d+} $time_output]/1000]
+        set size($action) [file size $file_name($action)]
+    }
+    puts -nonewline $i\t$size(sign)\t$size(delta)\t
+    puts -nonewline [expr $size(sign)+$size(delta)]\t$action_time(sign)\t
+    puts $action_time(delta)\t[expr $action_time(sign)+$action_time(delta)]
+}
