@@ -77,7 +77,7 @@ Calculating optimal --rows-per-hash value ...................
 2936    signature+delta size (kB)
 ~~~
 
-![sizes from --rows_per_hash graph](https://github.com/moisseev/sqlite3-rdiff/blob/master/sizes_from_rows_per_hash.png)
+![sizes from --rows_per_hash graph](https://github.com/moisseev/sqlite3-rdiff/raw/master/sizes_from_rows_per_hash.png)
 
 ## License
 
