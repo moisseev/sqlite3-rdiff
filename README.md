@@ -63,19 +63,21 @@ Note: we can patch slave.db on-the-place by setting last parameter for "sqlite3-
 
 ## The --rows-per-hash option
 
-See below test results with different --rows-per-hash values on 10 Mb database.
+See below test results with different --rows-per-hash values on 52 Mb database.
 
 ## Calculation optimal --rows-per-hash value
 
 ~~~
 $ ./sqlite3-rdiff analyze slave.db master.db
 analyze slave.db master.db --table-name % --multimaster 0 --rows-per-hash 10
-9832	old-database size (kB)
-9832	new-database size (kB)
-Calculating optimal --rows-per-hash value ..........
-9	optimal --rows-per-hash option value
-496	signature+delta size (kB)
+52774   old-database size (kB)
+53919   new-database size (kB)
+Calculating optimal --rows-per-hash value ...................
+18      optimal --rows-per-hash option value
+2936    signature+delta size (kB)
 ~~~
+
+![sizes from --rows_per_hash graph](https://github.com/moisseev/sqlite3-rdiff/blob/master/sizes_from_rows_per_hash.png)
 
 ## License
 
