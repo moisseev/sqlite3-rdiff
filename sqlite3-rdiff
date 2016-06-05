@@ -240,6 +240,7 @@ proc patch {orig delta dest args} {
             puts "-$delete\t+$insert\t$table ($triggers triggers disabled)"
         }
     }
+    db close
 }
 
 proc analyze {slave master args} {
