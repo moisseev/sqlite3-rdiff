@@ -96,6 +96,7 @@ proc signature {orig signature args} {
         db eval {create table _sqlite_rdiff_option (name text, value text)}
         db eval {create table _sqlite_rdiff_table (name text)}
         db eval {insert into _sqlite_rdiff_option values ('rows-per-hash',$opts(--rows-per-hash))}
+        db eval {insert into _sqlite_rdiff_option values ('table-name_signature',$opts(--table-name))}
 
         set tables [db eval "select name from orig.sqlite_master where type='table' and name not like 'sqlite_%' and name like '$opts(--table-name)'"]
         foreach table $tables {
@@ -137,6 +138,7 @@ proc delta {signature dest delta args} {
     db transaction {
         db eval {create table delta._sqlite_rdiff_option as select * from signature._sqlite_rdiff_option}
         db eval {create table delta._sqlite_rdiff_table as select * from signature._sqlite_rdiff_table}
+        db eval {insert into delta._sqlite_rdiff_option values ('table-name_delta',$opts(--table-name))}
 
         set rows_per_hash [db onecolumn {select value from delta._sqlite_rdiff_option where name='rows-per-hash'}]
 
@@ -144,7 +146,9 @@ proc delta {signature dest delta args} {
         foreach table $tables {
             # if no-exists table
             if {[db exists {select name from main.sqlite_master where type='table' and name=$table}] == 0} {
-                puts "-\t-\t$table"
+                puts " X\t X\t$table (will be dropped)"
+                db eval "delete from delta._sqlite_rdiff_table where name='$table'"
+                continue
             }
             # table exists, build delta
             set cols [join [table_columns $table] ,]
@@ -202,15 +206,40 @@ proc patch {orig delta dest args} {
     db eval {attach database $delta as delta}
 
     db transaction {
+        # in multimaster mode no table drops may be performed
+        if {$opts(--multimaster) == 0} {
+
+            # select tables that matches all of --table-name options (used on every stage)
+            set tables [db eval "select name from main.sqlite_master where type='table'
+                and name not like 'sqlite_%'
+                and name like '$opts(--table-name)'
+                and name like '[db onecolumn {select value from delta._sqlite_rdiff_option where name='table-name_signature'}]'
+                and name like '[db onecolumn {select value from delta._sqlite_rdiff_option where name='table-name_delta'}]'"]
+
+            # drop tables that do not exist in source database
+            foreach table $tables {
+            # if no-exists table
+                if {[db exists {select name from delta._sqlite_rdiff_table where name like $table}] == 0} {
+                    db eval "drop table main.$table"
+                    puts " X\t X\t$table (dropped)"
+                }
+            }
+        }
+
         set rows_per_hash [db onecolumn {select value from delta._sqlite_rdiff_option where name='rows-per-hash'}]
 
         set tables [db eval "select name from delta._sqlite_rdiff_table where name like '$opts(--table-name)'"]
         foreach table $tables {
             # if no-exists table
             if {[db exists {select name from main.sqlite_master where type='table' and name=$table}] == 0} {
-                puts "-\t-\t$table"
+                puts "---\t---\t$table (does not exists in target database)"
                 continue
             }
+            if {[db exists "select name from delta.sqlite_master where type='table' and name='_sqlite_rdiff_d_$table'"] == 0} {
+                puts "---\t---\t$table (does not exists in delta)"
+                continue
+            }
+
             # table exists
             set trigger_sql {}
             set triggers 0
