@@ -69,7 +69,7 @@ See below test results with different --rows-per-hash values on 52 Mb database.
 
 ~~~
 $ ./sqlite3-rdiff analyze slave.db master.db
-analyze slave.db master.db --table-name % --multimaster 0 --rows-per-hash 10
+analyze slave.db master.db --table-name %
 52774   old-database size (kB)
 53919   new-database size (kB)
 Calculating optimal --rows-per-hash value ...................

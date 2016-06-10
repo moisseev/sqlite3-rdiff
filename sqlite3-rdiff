@@ -77,7 +77,7 @@ proc table_columns {table} {
 
 proc signature {orig signature args} {
     array set opts $args
-    puts "signature $orig $signature $args"
+    puts "signature $orig $signature --table-name $opts(--table-name) --rows-per-hash $opts(--rows-per-hash)"
 
     if {[file exists $orig] == 0} {
         puts "File $orig does not exists"
@@ -115,7 +115,7 @@ proc signature {orig signature args} {
 
 proc delta {signature dest delta args} {
     array set opts $args
-    puts "delta $signature $dest $delta $args"
+    puts "delta $signature $dest $delta --table-name $opts(--table-name)"
 
     if {[file exists $signature] == 0} {
         puts "File $signature does not exists"
@@ -184,7 +184,7 @@ proc delta {signature dest delta args} {
 
 proc patch {orig delta dest args} {
     array set opts $args
-    puts "patch $orig $delta $dest $args"
+    puts "patch $orig $delta $dest --table-name $opts(--table-name) --multimaster $opts(--multimaster)"
 
     if {[file exists $orig] == 0} {
         puts "File $orig does not exists"
@@ -274,7 +274,7 @@ proc patch {orig delta dest args} {
 
 proc analyze {slave master args} {
     array set opts $args
-    puts "analyze $slave $master $args"
+    puts "analyze $slave $master --table-name $opts(--table-name)"
 
     if {[file exists $slave] == 0} {
         puts "File $slave does not exists"
