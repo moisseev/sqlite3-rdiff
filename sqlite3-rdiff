@@ -12,7 +12,7 @@ NAME
        sqlite3-rdiff - compute and apply signature-based row differences for SQLite3
                        databases
 
-SYNOPSYS
+SYNOPSIS
        sqlite3-rdiff [--table-name expression] [--rows-per-hash N] signature old-database signature-file
 
        sqlite3-rdiff [--table-name expression] delta signature-file new-database delta-file
@@ -53,8 +53,8 @@ LICENSE
        This code in Public Domain
 
 SEE ALSO
-       The main sqlite3-rdiff web page is at 
-       http://sqlite.mobigroup.ru/src/wiki?name=sqlite3-rdiff
+       The main sqlite3-rdiff web page is at
+       http://sqlite.mobigroup.ru/wiki?name=sqlite3-rdiff
 
 }
     exit

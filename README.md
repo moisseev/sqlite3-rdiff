@@ -15,7 +15,7 @@ Signature is computed by md5 algorithm for each full row. Hash collisions are
 resolved by using different --rows-per-hash for some replication session.
 The result-file can be same as the old-file in patch mode.
  
-## Synopsys
+## Synopsis
 
 ~~~
 sqlite3-rdiff [--table-name expression] [--rows-per-hash N] signature old-database signature-file
