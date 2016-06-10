@@ -17,7 +17,7 @@ SYNOPSYS
 
        sqlite3-rdiff [--table-name expression] delta signature-file new-database delta-file
 
-       sqlite3-rdiff [--table-name expression] patch old-database delta-file result-database
+       sqlite3-rdiff [--table-name expression] [--multimaster] patch old-database delta-file result-database
 
        sqlite3-rdiff [--table-name expression] analyze old-database new-database
 
