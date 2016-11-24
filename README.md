@@ -11,9 +11,8 @@ compute and apply signature-based row differences for SQLite3 databases
 
 ## Description
 
-Signature is computed by md5 algorithm for each full row. Hash collisions are
+Signatures are computed using `md5` algorithm for each full row. Hash collisions are
 resolved by using different --rows-per-hash for some replication session.
-The result-file can be same as the old-file in patch mode.
  
 ## Synopsis
 
@@ -26,6 +25,8 @@ sqlite3-rdiff [--table-name expression] [--multimaster] patch old-database delta
 
 sqlite3-rdiff [--table-name expression] analyze old-database new-database
 ~~~
+
+In `patch` mode the same database can be specified as `old-database` and `result-database` (in-place patching).
 
 ## Options
 
@@ -51,7 +52,7 @@ sqlite3-rdiff [--table-name expression] analyze old-database new-database
 
 ## Usage
 
-The slave.db is an outdated version of master.db database. The commands below will sync slave.db to actual version of master.db.
+The `slave.db` is an outdated version of the `master.db` database. The commands below synchronize the `slave.db` with actual version of the `master.db`.
 
 ~~~
 ./sqlite3-rdiff --rows-per-hash 10 signature slave.db slave.db.sign
@@ -59,14 +60,11 @@ The slave.db is an outdated version of master.db database. The commands below wi
 ./sqlite3-rdiff patch slave.db slave.db.delta slave.db
 ~~~
 
-Note: we can patch slave.db on-the-place by setting last parameter for "sqlite3-rdiff patch" to the slave.db or create a new database by setting last parameter different.
+Note: we can patch `slave.db` in place by setting the last parameter of `sqlite3-rdiff patch` to the `slave.db` or create a new database by specifying different file name.
 
-## The --rows-per-hash option
+## Calculating optimal `--rows-per-hash` value
 
-See below test results with different --rows-per-hash values on 52 Mb database.
-
-## Calculation optimal --rows-per-hash value
-
+The `analyze` command can be used to calculate optimal `--rows-per-hash` value:
 ~~~
 $ ./sqlite3-rdiff analyze slave.db master.db
 analyze slave.db master.db --table-name %
@@ -79,11 +77,16 @@ Calculating optimal --rows-per-hash value ...................
 
 ![sizes from --rows_per_hash graph](https://github.com/moisseev/sqlite3-rdiff/raw/master/sizes_from_rows_per_hash.png)
 
+## Practical example
+
+[sqlite3-sync](https://github.com/moisseev/sqlite3-sync) - live SQLite3 database master-slave replication with sqlite3-rdiff using rsync over SSH.
+> <sub>Rsync in conjunction with signature and delta files caching further reduces the transferring data volume. Total data amount transferred on the wire in both directions is about `0.6%` of the slave database size.</sub>
+
 ## License
 
-This code in Public Domain
+This code in Public Domain.
 
-## Acknowledgements
+## Acknowledgments
 
 The code is based heavily on the [now deprecated](http://sqlite.mobigroup.ru/finfo?name=util/sqlite3-rdiff) [MBG SQLite's](http://sqlite.mobigroup.ru) [sqlite3-rdiff](http://sqlite.mobigroup.ru/wiki?name=sqlite3-rdiff) utility by Alexey Pechnikov <pechnikov@mobigroup.ru>.
 
